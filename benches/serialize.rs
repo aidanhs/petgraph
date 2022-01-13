@@ -9,9 +9,9 @@ mod serialize {
     use rand::Rng;
     use test::Bencher;
 
-    const NUM_NODES: usize = 1_000_000;
-    const NUM_EDGES: usize = 100_000;
-    const NUM_HOLES: usize = 1_000_000;
+    const NUM_NODES: usize = 100_000;
+    const NUM_EDGES: usize = 2_000_000;
+    const NUM_HOLES: usize = 100_000;
 
     fn make_stable_graph() -> StableGraph<u32, u32> {
         let mut g = StableGraph::with_capacity(NUM_NODES + NUM_HOLES, NUM_EDGES);
@@ -35,6 +35,74 @@ mod serialize {
         }
 
         g
+    }
+
+    #[bench]
+    fn aidan_make_stable_graph(bench: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let edges: Vec<_> = (0..NUM_EDGES).map(|_| {
+            let first = rng.gen_range(0, NUM_NODES + NUM_HOLES);
+            let second = rng.gen_range(0, NUM_NODES + NUM_HOLES - 1);
+            let second = second + (second >= first) as usize;
+            let weight: u32 = rng.gen();
+            (first, second, weight)
+        }).collect();
+
+        //let graph = bench.iter(|| make_stable_graph());
+
+        let graph = bench.iter(|| {
+            let mut g = StableGraph::<u32, u32>::with_capacity(NUM_NODES + NUM_HOLES, NUM_EDGES);
+            let indices: Vec<_> = (0..NUM_NODES + NUM_HOLES)
+                .map(|i| g.add_node(i as u32))
+                .collect();
+
+            g.extend_with_edges(edges.iter()
+                                .map(|&(first, second, weight)| (indices[first], indices[second], weight)));
+
+            // Remove nodes to make the structure a bit more interesting
+            while g.node_count() > NUM_NODES {
+                let idx = rng.gen_range(0, indices.len());
+                g.remove_node(indices[idx]);
+            }
+
+            g
+        });
+
+        bincode::serialize(&graph).unwrap();
+    }
+
+    #[bench]
+    fn aidan_make_graph_map(bench: &mut Bencher) {
+        let mut rng = rand::thread_rng();
+        let edges: Vec<_> = (0..NUM_EDGES).map(|_| {
+            let first = rng.gen_range(0, NUM_NODES + NUM_HOLES);
+            let second = rng.gen_range(0, NUM_NODES + NUM_HOLES - 1);
+            let second = second + (second >= first) as usize;
+            let weight: u32 = rng.gen();
+            (first, second, weight)
+        }).collect();
+
+        //let graph = bench.iter(|| make_stable_graph());
+
+        let graph = bench.iter(|| {
+            let mut g = GraphMap::<u32, u32, Undirected>::with_capacity(NUM_NODES + NUM_HOLES, NUM_EDGES);
+            let indices: Vec<_> = (0..NUM_NODES + NUM_HOLES)
+                .map(|i| g.add_node(i as u32))
+                .collect();
+
+            g.extend(edges.iter()
+                                .map(|&(first, second, weight)| (indices[first], indices[second], weight)));
+
+            // Remove nodes to make the structure a bit more interesting
+            while g.node_count() > NUM_NODES {
+                let idx = rng.gen_range(0, indices.len());
+                g.remove_node(indices[idx]);
+            }
+
+            g
+        });
+
+        bincode::serialize(&graph).unwrap();
     }
 
     #[bench]
